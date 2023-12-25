@@ -1,0 +1,20 @@
+package com.delivery.model;
+
+import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+@Setter
+@Getter
+@ToString
+public class RequestDeliveryDTO
+{
+  private String orderId;
+  private String orderUserId;
+  private String orderUserName;
+  private String orderDate;
+  private String shipAddress;
+  private List<RequestDeliveryDetailDTO> products;
+}
+

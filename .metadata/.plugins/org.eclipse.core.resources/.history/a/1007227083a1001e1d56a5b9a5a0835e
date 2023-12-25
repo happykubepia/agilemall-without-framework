@@ -1,0 +1,410 @@
+package com.order.service;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.web.client.RestTemplate;
+
+import com.order.dao.OrderDao;
+import com.order.model.*;
+import lombok.Value;
+import reactor.core.publisher.Mono;
+
+public class OrderService 
+{
+	@Autowired
+	private OrderDao orderDao;
+
+	@Autowired
+	private OrderManager orderManager;
+
+	@Autowired
+	private QueueComponent queue;
+
+	@Value("${customer.svc}")
+	private String customerSvcURL;
+
+	@Value("${delivery.svc}")
+	private String deliverySvcURL;
+
+	/**
+	 * @param orderId
+	 * @return
+	 */
+	public Mono<ResultVO> getState(String orderId)
+	{
+		ResultVO<OrderState> result = new ResultVO<>();
+
+		Order order = orderDao.selectOrder(orderId);
+		if ( order != null ) {
+			OrderState state = new OrderState();
+			state.setOrderId(orderId);
+			state.setOrderAmount(order.getOrderTotalAmount());
+
+			/*
+			 * 사용자 정보
+			 */
+			ResultVO<User> user = getCustomer(order.getOrderUserId());
+			state.setUserName(user.getResult().getUserName());
+
+			/*
+			 * 배송 정보
+			 */
+			ResultVO<Delivery> ship = getDelivery(order.getOrderId());
+			state.setDeliveryState(ship.getResult().getShippingState());
+
+			result.setReturnCode(true);
+			result.setResult(state);
+		}
+		else {
+			result.setReturnCode(false);
+			result.setReturnMessage("주문 정보가 없습니다.");
+		}
+
+		return Mono.just(result);
+	}
+
+	/**
+	 * @param orderId
+	 * @return
+	 */
+	private ResultVO<Delivery> getDelivery(String orderId) {
+		RestTemplate restTemplate = new RestTemplate();
+		String url = deliverySvcURL + "/shippings/" + orderId;
+		ResultVO<Delivery> result = restTemplate.exchange(url, HttpMethod.GET, null, new ParameterizedTypeReference<ResultVO<Delivery>>(){}).getBody();
+		return result;
+	}
+
+	/**
+	 * 사용자 정보를 가져온다.
+	 * 
+	 * @param userId
+	 * @return
+	 */
+	private ResultVO<User> getCustomer(String userId) {
+		RestTemplate restTemplate = new RestTemplate();
+		String url = customerSvcURL + "/users/" + userId;
+		ResultVO<User> result = restTemplate.exchange(url, HttpMethod.GET, null, new ParameterizedTypeReference<ResultVO<User>>(){}).getBody();
+		return result;
+	}
+
+	/**
+	 * 비동기 주문 처리를 수행한다.
+	 * 
+	 * @param login 사용자 ID, 비밀번호
+	 * @return
+	 */
+	public Mono<ResultVO<ResponseOrderDTO>> order(RequestOrderDTO order)
+	{
+		String orderId = UUID.randomUUID().toString();
+		String trxId = UUID.randomUUID().toString();
+		String orderDate = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+
+		/*
+		 * 메시지 브로커로 전달된 메시지를 Reactor 스트림으로 보내는 클래스
+		 */
+		ResultListener listener = new ResultListener();
+		orderManager.addOrder(trxId, listener);
+
+		/*
+		 * 메시지 브로커를 통해 전달되는 이벤트 상태를 저장하는 클래스
+		 */
+		OrderEvent orderEvent = OrderEvent.builder()
+				.trxId(trxId)
+				.build();
+		/*
+		 * 실행 결과 및 응답객체
+		 */
+		ResponseOrderVO resOrderVo = new ResponseOrderVO();
+		resOrderVo.setOrderId(orderId);
+		resOrderVo.setOrderDate(new SimpleDateFormat("yyyy-MM-dd").format(new Date()));
+
+		ResultVO<ResponseOrderVO> resultVo = new ResultVO<>();
+		resultVo.setReturnCode(true);
+		resultVo.setResult(resOrderVo);
+
+		return Flux.create(sink -> {
+			listener.register(sink);
+		})
+				.subscriberContext(ctx -> ctx.put("orderEvent", orderEvent))
+				.doOnSubscribe(data->{
+					startTransaction(order, trxId, orderId, orderDate);
+				})
+				.doOnNext(recvData->{
+					/*
+					 * 참여 서비스에서 등답이 오면 수행
+					 */
+					processResponse(recvData, orderEvent, resultVo);
+				})
+				.buffer(3)
+				.next()
+				.thenReturn(resultVo)
+				.doAfterTerminate(()->{
+					//	        if ( orderEvent.isPaymentCompleted() && orderEvent.isDeliveryCompleted() ) {
+					//	          //resOrderVo.setState("배송중");
+					//	        }
+					//	        else if ( orderEvent.isPaymentCompleted() ) {
+					//	          //resOrderVo.setState("결제완료");
+					//	        }
+					endTransaction(trxId);
+				})
+				// TIMEOUT
+				.publishOn(Schedulers.single())
+				.timeout(Duration.ofSeconds(60))
+				.doOnError(e -> {
+					resultVo.setReturnCode(false);
+					if ( e instanceof FailThrowable ) {
+						resultVo.setReturnMessage(((FailThrowable)e).getErrorString());
+					}
+					else {
+						// TimeoutException
+						e.printStackTrace();
+						resultVo.setReturnMessage("처리 시간을 초과 하였습니다.");
+					}
+
+					rollback(trxId, orderId, orderEvent);
+					endTransaction(trxId);
+				})
+				.onErrorReturn(resultVo);    
+	}
+
+	/**
+	 * 메시지 브로커로 메시지가 수신되면 수행한다.
+	 * 
+	 * @param recvData
+	 * @param event
+	 * @param resultVo
+	 */
+	private void processResponse(Object recvData, OrderEvent event, ResultVO resultVo)
+	{
+		Gson gson = new Gson();
+		String type = ((JsonElement)recvData).getAsJsonObject().get("messageType").getAsString();
+
+		if ( "PAYMENT".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ResponsePaymentVO>>(){}.getType();
+			ChannelResponse<ResponsePaymentVO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+		else if ( "DELIVERY".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ResponseDeliveryVO>>(){}.getType();
+			ChannelResponse<ResponseDeliveryVO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+	}
+
+	/**
+	 * 주문 내역을 저장하고, 결제(payment-service), 배송(delivery-service)로 메시지를 전달한다.
+	 * 
+	 * @param order 클라이언트 요청 정보
+	 * @param trxId 현재 트랜잭션 ID
+	 * @param orderId 주문 ID
+	 * @param orderDate 주문일시
+	 */
+	private void startTransaction(RequestOrderVO order, String trxId, String orderId, String orderDate)
+	{
+		int total = 0;
+		int totQty = 0;
+
+		/*
+		 * 주문 상세
+		 */
+		for(RequestOrderDetailVO vo : order.getProducts()) {
+			OrderDetail dtl = new OrderDetail();
+			dtl.setOrderId(orderId);
+			dtl.setOrderQty(vo.getQty());
+			dtl.setPrice(vo.getPrice());
+			dtl.setProductName(vo.getProductName());
+			orderDao.insertDetail(dtl);
+
+			total += vo.getPrice();
+			totQty += vo.getQty();
+		}
+
+		/*
+		 * 주문 마스터
+		 */
+		Order mst = new Order();
+		mst.setOrderId(orderId);
+		mst.setOrderDate(orderDate);
+		mst.setOrderTotalAmount(total);
+		mst.setOrderUserId(order.getUserId());
+		mst.setAccumulatePoint((int)(total * 0.01));
+		orderDao.insertOrder(mst);
+
+		/*
+		 * 사용자 정보를 얻는다.
+		 */
+		ResultVO<User> user = getCustomer(order.getUserId());
+
+		/*
+		 * 결제 요청 메시지
+		 */
+		RequestPaymentVO reqPayment = new RequestPaymentVO();
+		reqPayment.setOrderId(orderId);
+		reqPayment.setUserId(order.getUserId());
+		reqPayment.setAmount(total);
+		reqPayment.setQty(totQty);
+		reqPayment.setCardNumber(user.getResult().getCardNumber());
+
+		ChannelRequest<RequestPaymentVO> req = new ChannelRequest<>();
+		req.setTrxId(trxId);
+		req.setPayload(reqPayment);
+
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		queue.sendPaymentMessage(gson.toJson(req));
+
+		/*
+		 * 배송 요청 메시지
+		 */
+		RequestDeliveryVO reqDelivery = new RequestDeliveryVO();
+		reqDelivery.setOrderId(orderId);
+		reqDelivery.setOrderUserId(order.getUserId());
+		reqDelivery.setOrderUserName(user.getResult().getUserName());
+		reqDelivery.setShipAddress(user.getResult().getAddress());
+		reqDelivery.setOrderDate(orderDate);
+		reqDelivery.setOrderQty(totQty);
+		reqDelivery.setOrderAmount(total);
+		reqDelivery.setAccumulatePoint(mst.getAccumulatePoint());
+
+		ChannelRequest<RequestDeliveryVO> reqShip = new ChannelRequest<>();
+		reqShip.setTrxId(trxId);
+		reqShip.setPayload(reqDelivery);
+
+		queue.sendDeliveryMessage(gson.toJson(reqShip));
+
+		/*
+		 * 포인트 사용 메시지
+		 */
+		if ( order.getUsePoint() > 0 ) {
+			RequestPointVO payload = new RequestPointVO();
+			payload.setUserId(order.getUserId());
+			payload.setUsePoint(-1 * order.getUsePoint());
+
+			ChannelRequest<RequestPointVO> reqUse = new ChannelRequest<RequestPointVO>();
+			reqUse.setTrxId(trxId);
+			reqUse.setPayload(payload);
+
+			queue.sendPointMessage(gson.toJson(reqUse));
+		}
+	}
+
+	/**
+	 * @param trxId 현재 트랜잭션 ID
+	 */
+	private void endTransaction(String trxId)
+	{
+		orderManager.removeOrder(trxId);
+	}
+
+	/**
+	 * 타임아웃 또는 오류가 발생한 경우 수행
+	 * 
+	 * @param orderId
+	 * @param OrderEvent
+	 */
+	private void rollback(String trxId, String orderId, OrderEvent event)
+	{
+		System.out.println("@.@ ROLLBACK :" + event); 
+
+		/*
+		 * order_mst 삭제 
+		 */
+		orderDao.deleteOrder(orderId);
+
+		/*
+		 * order_dtl 삭제
+		 */
+		orderDao.deleteOrderDetail(orderId);
+
+		/*
+		 * payment삭제 메시지 전달
+		 */
+		RequestPaymentVO reqPayment = new RequestPaymentVO();
+		reqPayment.setOrderId(orderId);
+
+		ChannelRequest<RequestPaymentVO> req = new ChannelRequest<>();
+		req.setTrxId(trxId);
+		req.setMessageType("RLB");
+		req.setPayload(reqPayment);
+
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		queue.sendPaymentMessage(gson.toJson(req));  
+
+		/*
+		 * delivery 삭제 메시지 전달
+		 */
+		RequestDeliveryVO reqDelivery = new RequestDeliveryVO();
+		reqDelivery.setOrderId(orderId);
+
+		ChannelRequest<RequestDeliveryVO> reqShip = new ChannelRequest<>();
+		reqShip.setTrxId(trxId);
+		reqShip.setMessageType("RLB");
+		reqShip.setPayload(reqDelivery);
+
+		queue.sendDeliveryMessage(gson.toJson(reqShip));    
+	}
+
+	@Bean
+	Queue responseQueue() {
+		return new Queue(IChnnel.CH_ORDER_RESPONSE, false);
+	}
+
+	/**
+	 * payment, delivery 서비스 응답을 수신한다.
+	 * 
+	 * @param consumerRecord
+	 */
+	@RabbitListener(queues = IChnnel.CH_ORDER_RESPONSE)
+	public void receiveResponse(String payload) {
+		System.out.println("[@.@ ORDER RECEIVED] " + payload.toString());
+
+		try {
+			Gson gson = new Gson();
+			JsonElement jsonObj = gson.fromJson(payload, JsonElement.class);
+
+			String trxId = jsonObj.getAsJsonObject().get("trxId").getAsString();
+			String type = jsonObj.getAsJsonObject().get("messageType").getAsString();
+
+			ResultListener listener = orderManager.getOrder(trxId);
+			if ( listener != null ) {
+				listener.fireData(jsonObj);
+				if ( "PAYMENT".equals(type) ) {
+					Type resType = new TypeToken<ChannelResponse<ResponsePaymentVO>>(){}.getType();
+					ChannelResponse<ResponsePaymentVO> resObj = gson.fromJson(payload, resType);
+
+					if ( resObj.isReturnCode() ) {
+						//orderRepository.updateState4Payment(resObj.getPayload().getOrderId());
+					}
+				}
+			}
+
+			/*
+			 * 트랜잭션이 완료된 이후의 메시지 중에서 배송에서 전달된 응답만 처리한다.
+			 */
+			if ( "DELIVERY".equals(type) ) {
+				Type resType = new TypeToken<ChannelResponse<ResponseDeliveryVO>>(){}.getType();
+				ChannelResponse<ResponseDeliveryVO> resObj = gson.fromJson(payload, resType);
+
+				if ( resObj.isReturnCode() ) {
+					//orderRepository.updateState4Delivery(resObj.getPayload().getOrderId());
+				}
+			}
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+}
+

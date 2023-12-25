@@ -1,0 +1,5 @@
+package com.payment.dao;
+
+public class PaymentDao {
+
+}

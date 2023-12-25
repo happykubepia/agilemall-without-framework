@@ -1,0 +1,5 @@
+package com.product.rest;
+
+public class ProductController {
+
+}

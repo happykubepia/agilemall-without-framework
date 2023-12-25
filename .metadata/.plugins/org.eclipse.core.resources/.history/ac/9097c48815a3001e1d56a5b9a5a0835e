@@ -1,0 +1,13 @@
+package com.point.model;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Setter
+@Getter
+public class RequestPointDTO {
+  private String orderId;
+  private String userId;
+  private int Point;
+}
+

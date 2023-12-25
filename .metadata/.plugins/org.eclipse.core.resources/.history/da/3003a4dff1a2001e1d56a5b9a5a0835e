@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//ED" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.customer.dao.UserDao">
+	<select id="selectUserAll"
+		resultType="com.customer.model.User">
+		select
+		user_id,
+		user_name,
+		address,
+		card_number,
+		point_number
+		from tb_customer
+	</select>
+	<select id="selectUser" parameterType="string"
+		resultType="com.customer.model.User">
+		select
+		user_id,
+		user_name,
+		address,
+		card_number,
+		point_number
+		from tb_customer
+		where user_id = #{userId}
+	</select>
+	<insert id="insertUser"
+		parameterType="com.customer.model.User">
+		insert into tb_customer(
+		user_id,
+		user_name,
+		address,
+		card_number,
+		point_number
+		) values (
+		#{userId},
+		#{userName},
+		#{address},
+		#{cardNumber},
+		#{pointNumber}
+		)
+	</insert>
+	<update id="updateUser"
+		parameterType="com.customer.model.User">
+		update customer set
+		user_name = #{userName},
+		address = #{address},
+		card_number = #{cardNumber},
+		point_number = #{pointNumber}
+		where user_id = #{userId}
+	</update>
+	
+	<delete id="deleteUser" parameterType="string">
+		delete from customer
+		where user_id = #{userId}
+	</delete>
+	  	
+</mapper>

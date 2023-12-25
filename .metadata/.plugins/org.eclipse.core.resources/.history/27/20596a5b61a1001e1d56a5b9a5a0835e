@@ -1,0 +1,91 @@
+package com.point.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.point.dao.PointRepository;
+import com.point.model.Point;
+import com.point.model.ResultVO;
+
+@Service
+public class PointService {
+	private final Logger log = LoggerFactory.getLogger(getClass());
+	
+	@Autowired
+	private PointRepository pointRepository;
+
+	public ResponseEntity<ResultVO<Point>> search(String userId) {
+		log.info("search point => "+userId);
+		
+		return new ResponseEntity<ResultVO<Point>>(
+				ResultVO.<Point>builder()
+				.returnCode(true)
+				.result(pointRepository.findByUserId(userId))
+				.build(), HttpStatus.OK);
+
+	}
+
+	public ResponseEntity<ResultVO<Point>> minus(String userId, int point) {
+		log.debug("point MINUS => "+userId+":"+point);
+		
+		ResultVO<Point> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			changePoint(userId, -point);
+
+			result = ResultVO.<Point>builder()
+					.returnCode(true)
+					.result(pointRepository.findByUserId(userId))
+					.build();
+		} catch (Exception e) {
+			result = ResultVO.<Point>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Point>>(result, HttpStatus.OK);
+	}
+	
+
+	public ResponseEntity<ResultVO<Point>> plus(String userId, int point) {
+		log.debug("point PLUS => "+userId+":"+point);
+		
+		ResultVO<Point> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			changePoint(userId, point);
+
+			result = ResultVO.<Point>builder()
+					.returnCode(true)
+					.result(pointRepository.findByUserId(userId))
+					.build();
+		} catch (Exception e) {
+			result = ResultVO.<Point>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Point>>(result, HttpStatus.OK);
+	}		
+
+	private void changePoint(String userId, int point) {
+		Point point = pointRepository.findByUserId(userId);
+
+		if ( point != null ) {
+			point.setUserPoint(point.getUserPoint() + point);
+			pointRepository.save(point);
+		}
+
+	}
+}
+

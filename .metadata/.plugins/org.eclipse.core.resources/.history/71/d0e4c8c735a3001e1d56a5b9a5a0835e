@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+ "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.delivery.dao.DeliveryDao">
+    
+    <select id="selectDelivery" parameterType="java.lang.String" resultType="com.delivery.model.Delivery">
+      SELECT  ship_id      as shipId,
+              order_id     as orderId,
+              order_usr_id as orderUserId,
+              order_usr_nm as orderUserName,
+              order_dtm    as orderDate,
+              order_prod_nm    as orderProdNm,
+              order_qty    as orderQty,
+              ship_addr    as shipAddress,
+              ship_state   as shippingState
+      FROM    tb_shipping
+      WHERE   order_id = #{orderId}
+    </select>
+    
+    <insert id="insertDelivery" parameterType="com.delivery.model.Delivery">
+    INSERT INTO tb_shipping (
+      ship_id,
+      order_id,
+      order_usr_id,
+      order_usr_nm,
+      order_dtm,
+      ship_addr,
+      ship_state
+    ) VALUES (
+      #{shipId},
+      #{orderId},
+      #{orderUserId},
+      #{orderUserName},
+      #{orderDate},
+      #{shipAddress},
+      #{shippingState}
+    )
+    </insert>
+  
+    <insert id="insertDeliveryDetail" parameterType="com.delivery.model.DeliveryDetail">
+    INSERT INTO tb_shipping_detail (
+      ship_id,
+      order_id,
+      order_prod_nm,
+      order_qry
+    ) VALUES (
+      #{shipId},
+      #{orderId},
+      #{orderProdNm},
+      #{orderQty}
+    )
+    </insert>
+    
+  <delete id="deleteDelivery" parameterType="java.lang.String">
+        DELETE FROM tb_shipping
+        WHERE  order_id = #{orderId}
+  </delete>
+  <delete id="deleteDeliveryDetail" parameterType="java.lang.String">
+        DELETE FROM tb_shipping_detail
+        WHERE  ship_id = #{shipId}
+  </delete>
+</mapper>

@@ -1,0 +1,69 @@
+package com.product.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.product.dao.ProductRepository;
+import com.product.model.Product;
+import com.product.model.ResultVO;
+
+@Service
+public class ProductService {
+	@Autowired
+	private ProductRepository productRepository;
+
+	public ResponseEntity<ResultVO<Product>> search(String prodName) {
+		return new ResponseEntity<ResultVO<Product>>(
+				ResultVO.<Product>builder()
+				.returnCode(true)
+				.result(productRepository.findByProductName(prodName))
+				.build(), HttpStatus.OK);
+
+	}
+
+	public ResponseEntity<ResultVO<Void>> out(String prodName, int qty) {
+		ResultVO<Void> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			 changeInventory(prodName, -qty);
+
+			 result = ResultVO.<Void>builder()
+					 .returnCode(true)
+					 .build();
+		} catch (Exception e) {
+			result = ResultVO.<Void>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Void>>(result, HttpStatus.OK);
+
+	}
+
+	public ResponseEntity<ResultVO<Void>> in(String prodName, int qty) {
+		ResultVO<Void> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			changeInventory(prodName, qty);
+
+			result = ResultVO.<Void>builder()
+					.returnCode(true)
+					.build();
+		} catch (Exception e) {
+			result = ResultVO.<Void>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Void>>(result, HttpStatus.OK);    
+	}		  
+}
+

@@ -1,0 +1,91 @@
+package com.point.service;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.product.dao.ProductRepository;
+import com.product.model.Product;
+import com.product.model.ResultVO;
+
+@Service
+public class PointService {
+	private final Logger log = LoggerFactory.getLogger(getClass());
+	
+	@Autowired
+	private ProductRepository productRepository;
+
+	public ResponseEntity<ResultVO<Product>> search(String prodName) {
+		log.info("search product => "+prodName);
+		
+		return new ResponseEntity<ResultVO<Product>>(
+				ResultVO.<Product>builder()
+				.returnCode(true)
+				.result(productRepository.findByProductName(prodName))
+				.build(), HttpStatus.OK);
+
+	}
+
+	public ResponseEntity<ResultVO<Product>> out(String prodName, int qty) {
+		log.debug("product OUT => "+prodName+":"+qty);
+		
+		ResultVO<Product> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			changeInventory(prodName, -qty);
+
+			result = ResultVO.<Product>builder()
+					.returnCode(true)
+					.result(productRepository.findByProductName(prodName))
+					.build();
+		} catch (Exception e) {
+			result = ResultVO.<Product>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Product>>(result, HttpStatus.OK);
+	}
+	
+
+	public ResponseEntity<ResultVO<Product>> in(String prodName, int qty) {
+		log.debug("product IN => "+prodName+":"+qty);
+		
+		ResultVO<Product> result = null;
+		try {
+			/*
+			 * MongoDB 갱신
+			 */
+			changeInventory(prodName, qty);
+
+			result = ResultVO.<Product>builder()
+					.returnCode(true)
+					.result(productRepository.findByProductName(prodName))
+					.build();
+		} catch (Exception e) {
+			result = ResultVO.<Product>builder()
+					.returnCode(false)
+					.returnMessage(e.getMessage())
+					.build();
+		}
+
+		return new ResponseEntity<ResultVO<Product>>(result, HttpStatus.OK);
+	}		
+
+	private void changeInventory(String prodName, int qty) {
+		Product prod = productRepository.findByProductName(prodName);
+
+		if ( prod != null ) {
+			prod.setInventoryQty(prod.getInventoryQty() + qty);
+			productRepository.save(prod);
+		}
+
+	}
+}
+

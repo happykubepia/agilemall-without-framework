@@ -1,0 +1,9 @@
+package com.payment.dao;
+
+import com.payment.model.Payment;
+
+public interface PaymentDao {
+	public void insertPayment(Payment payment);
+	public void deletePayment(String orderId);
+}
+

@@ -1,0 +1,94 @@
+package com.order.rest;
+
+import java.lang.reflect.Type;
+
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
+import com.order.model.ChannelResponse;
+import com.order.config.IChannel;
+import com.order.service.*;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.Value;
+
+@Tag(name="Order service API", description="Order service API")
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api")
+public class OrderController {
+	@Autowired
+	private OrderService orderService;
+	
+	@Autowired
+	private OrderManager orderManager;
+
+	@Autowired
+	private QueueComponent queue;
+
+	@Value("${customer.svc}")
+	private String customerSvcURL;
+
+	@Value("${delivery.svc}")
+	private String deliverySvcURL;
+
+	
+	@Bean
+	Queue responseQueue() {
+		return new Queue(IChannel.CH_ORDER_RESPONSE, false);
+	}
+
+	/**
+	 * payment, delivery 서비스 응답을 수신한다.
+	 * 
+	 * @param consumerRecord
+	 */
+	@RabbitListener(queues = IChannel.CH_ORDER_RESPONSE)
+	public void receiveResponse(String payload) {
+		System.out.println("[@.@ ORDER RECEIVED] " + payload.toString());
+
+		try {
+			Gson gson = new Gson();
+			JsonElement jsonObj = gson.fromJson(payload, JsonElement.class);
+
+			String trxId = jsonObj.getAsJsonObject().get("trxId").getAsString();
+			String type = jsonObj.getAsJsonObject().get("messageType").getAsString();
+
+			ResultListener listener = orderManager.getOrder(trxId);
+			if ( listener != null ) {
+				listener.fireData(jsonObj);
+				if ( "PAYMENT".equals(type) ) {
+					Type resType = new TypeToken<ChannelResponse<ResponsePaymentVO>>(){}.getType();
+					ChannelResponse<ResponsePaymentVO> resObj = gson.fromJson(payload, resType);
+
+					if ( resObj.isReturnCode() ) {
+						//orderRepository.updateState4Payment(resObj.getPayload().getOrderId());
+					}
+				}
+			}
+
+			/*
+			 * 트랜잭션이 완료된 이후의 메시지 중에서 배송에서 전달된 응답만 처리한다.
+			 */
+			if ( "DELIVERY".equals(type) ) {
+				Type resType = new TypeToken<ChannelResponse<ResponseDeliveryVO>>(){}.getType();
+				ChannelResponse<ResponseDeliveryVO> resObj = gson.fromJson(payload, resType);
+
+				if ( resObj.isReturnCode() ) {
+					//orderRepository.updateState4Delivery(resObj.getPayload().getOrderId());
+				}
+			}
+		}catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+}

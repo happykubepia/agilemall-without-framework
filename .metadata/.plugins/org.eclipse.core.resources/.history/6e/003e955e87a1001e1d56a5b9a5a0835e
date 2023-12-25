@@ -1,0 +1,11 @@
+package com.order.dao;
+
+import com.order.model.Order;
+import com.order.model.OrderDetail;
+
+public interface OrderDao {
+	public void insertDetail(OrderDetail detail);
+	public void insertOrder(Order order);
+	public void deleteOrder(String orderId);
+	public void deleteOrderDetail(String orderId);
+}

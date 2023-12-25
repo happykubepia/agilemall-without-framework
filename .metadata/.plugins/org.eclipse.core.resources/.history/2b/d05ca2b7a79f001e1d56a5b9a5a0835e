@@ -1,0 +1,23 @@
+package com.customer.config;
+
+public interface IChannel
+{
+  /*
+   * 요청 메시지 토픽
+   */
+  public static final String CH_ORDER_PAYMENT = "CH-ORDER-PAYMENT_CHOIES";
+  public static final String CH_ORDER_DELIVERY = "CH-ORDER-DELIVERY_CHOIES";
+  public static final String CH_ORDER_POINT = "CH-ORDER-POINT_CHOIES";
+  /*
+   * 포인트 서비스에서 고객 서비스로 메시지 전달
+   */
+  public static final String CH_POINT_CUSTOMER = "CH-POINT-CUSTOMER_CHOIES";
+  /*
+   * 배송 서비스에서 포인트 서비스로 메시지 전달
+   */
+  public static final String CH_DELIVERY_POINT = "CH-DELIVERY-POINT_CHOIES";
+    /*
+   * 응답 메시지 토픽
+   */
+  public static final String CH_ORDER_RESPONSE = "CH-ORDER-RESPONSE_CHOIES";
+}

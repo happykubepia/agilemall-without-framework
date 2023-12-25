@@ -1,0 +1,12 @@
+package com.product.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.product.dao.ProductRepository;
+
+public class ProductService {
+	  @Autowired
+	  private ProductRepository productRepository;
+
+	  public ResponseEntity<ResultVO<Product>> search
+}

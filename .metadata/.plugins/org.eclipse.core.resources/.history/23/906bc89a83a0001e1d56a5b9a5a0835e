@@ -1,0 +1,62 @@
+package com.payment.rest;
+
+import java.lang.reflect.Type;
+
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.payment.config.IChannel;
+import com.payment.model.ChannelRequest;
+import com.payment.model.RequestPaymentDTO;
+import com.payment.service.PaymentService;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+
+@Tag(name="Payment service API", description="Payment service API")
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api")
+public class PaymentController {
+	@Autowired
+	PaymentService paymentService;
+
+	@Bean
+	Queue responseQueue() {
+		return new Queue(IChannel.CH_ORDER_RESPONSE, false);
+	}
+
+	/*
+	 * 메시지 큐
+	 */
+	@Bean
+	Queue requestQueue() {
+		return new Queue(IChannel.CH_ORDER_PAYMENT, false);
+	}
+
+	@RabbitListener(queues = IChannel.CH_ORDER_PAYMENT)
+	public void processMessage(String payload) {
+		/*
+		 * json 문자열을 객체로 변환
+		 */
+		Gson gs = new Gson();
+		Type objType = new TypeToken<ChannelRequest<RequestPaymentDTO>>(){}.getType();
+		ChannelRequest<RequestPaymentDTO> req = gs.fromJson(payload, objType);
+
+		if ( "RLB".equals(req.getMessageType()) ) {
+			paymentService.rollback(req);
+		}
+		else {
+			// TRX
+			paymentService.startTransaction(gs, req);
+		}
+	}	  
+
+	  
+}

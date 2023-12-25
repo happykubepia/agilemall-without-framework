@@ -1,0 +1,15 @@
+package com.customer.service;
+
+public interface UserService {
+	public ResponseEntity <List<User>> getUserList();
+	
+	public ResponseEntity <User> getUserById(String userId);
+	
+	public ResponseEntity <String > setUserUpdate(String userId, User user) throws Exception;
+	
+	public ResponseEntity <String > setUserInsert(User user) throws Exception;
+	
+	public ResponseEntity <String > setUserDelete(String userId) throws Exception;
+	
+	public ResponseEntity <String> createTestUsers(int startUserId, int userCount)  throws Exception;
+}

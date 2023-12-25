@@ -1,0 +1,16 @@
+package com.delivery.model;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+@Setter
+@Getter
+@ToString
+public class DeliveryDetail
+{
+	private String shipId;
+	private String orderId;
+	private String productName;
+	private int qty;
+}

@@ -1,0 +1,6 @@
+package com.delivery.service;
+
+@Service
+public class DeliveryService {
+
+}
