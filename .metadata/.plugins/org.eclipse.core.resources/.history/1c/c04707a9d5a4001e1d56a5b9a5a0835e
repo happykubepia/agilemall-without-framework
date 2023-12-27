@@ -34,9 +34,9 @@ public class ResultListener
 		String type = jsonObj.get("messageType").getAsString();
 		
 		if ( event == null ) {
-			log.info("#### ["+type+"] ResultListener > fireData: Can't get OrderEvent object");
+			log.info("#### ["+type+"] Can't get OrderEvent object");
 		} else {
-			log.info("#### ["+type+"] ResultListener > fireData: Order ID:" + event.getOrderId());
+			log.info("#### ["+type+"] Order ID:" + event.getOrderId());
 		}
 
 		if ( "PAYMENT".equals(type) ) {

@@ -79,10 +79,10 @@ public class OrderController {
 			ResultListener listener = orderManager.getOrder(trxId);
 			
 			if ( listener != null ) {
-				log.info("#### ["+type+"] OrderController > receiveResponse: Find Result listener object for trxId-"+trxId);
+				log.info("#### ["+type+"] Find Result listener object for trxId-"+trxId);
 				listener.fireData(jsonObj);
 			} else {
-				log.info("#### ["+type+"] OrderController > receiveResponse: CAN't find Result listener object for trxId-"+trxId);
+				log.info("#### ["+type+"] CAN't find Result listener object for trxId-"+trxId);
 			}
 
 		}catch(Exception e) {

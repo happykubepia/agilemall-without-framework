@@ -292,7 +292,7 @@ public class OrderService
 		boolean retCode = jsonObj.get("returnCode").getAsBoolean();
 		String errMsg = "";
 		
-		log.info("#### ["+type+"] OrderService > processResponse: returnCode=>"+retCode);
+		log.info("#### ["+type+"] START processResponse(returnCode:"+retCode);
 	
 		if(!retCode) {
 			errMsg = jsonObj.get("errorString").getAsString();
@@ -302,6 +302,45 @@ public class OrderService
 			
 			rollback(trxId, event.getOrderId(), event);		//rollback 처리 
 		}
+		
+		/*
+		if ( "PAYMENT".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ResponsePaymentDTO>>(){}.getType();
+			ChannelResponse<ResponsePaymentDTO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+		else if ( "DELIVERY".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ResponseDeliveryDTO>>(){}.getType();
+			ChannelResponse<ResponseDeliveryDTO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+		else if ( "POINT".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ResponsePointDTO>>(){}.getType();
+			ChannelResponse<ResponsePointDTO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+		else if ( "PRODUCT".equals(type) ) {
+			Type resType = new TypeToken<ChannelResponse<ProductInventoryDTO>>(){}.getType();
+			ChannelResponse<ProductInventoryDTO> resObj = gson.fromJson((JsonElement)recvData, resType);
+
+			if ( resObj.isReturnCode() == false ) {
+				resultVo.setReturnCode(false);
+				resultVo.setReturnMessage(resObj.getErrorString());
+			}
+		}
+		*/
 	}
 
 	/**

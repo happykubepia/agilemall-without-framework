@@ -292,7 +292,7 @@ public class OrderService
 		boolean retCode = jsonObj.get("returnCode").getAsBoolean();
 		String errMsg = "";
 		
-		log.info("#### ["+type+"] OrderService > processResponse: returnCode=>"+retCode);
+		log.info("#### ["+type+"] START processResponse(returnCode:"+retCode);
 	
 		if(!retCode) {
 			errMsg = jsonObj.get("errorString").getAsString();
