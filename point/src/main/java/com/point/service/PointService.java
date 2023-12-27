@@ -118,11 +118,14 @@ public class PointService {
 		try {
 			
 			RequestPointDTO payload = req.getPayload();
-			String userId = payload.getUserId();
-			String plusMinus = payload.getPlusMinus();
-			int point = payload.getPoint();		//차감할 포인트가 전달됨
 			Point obj = null;
-			if("+".equals(plusMinus)) obj = changePoint(userId, point); else obj = changePoint(userId, -1 * point);
+			
+			String userId = payload.getUserId();
+			int usePoint = payload.getUsePoint();		//차감할 포인트
+			int addPoint = payload.getAddPoint();		//구매가에 따른 부여할 포인트 
+			
+			if(usePoint > 0) obj = changePoint(userId, -1 * usePoint);
+			obj = changePoint(userId, addPoint);
 			
 			/*
 			 * 고객정보의 Point 업데이트를 위한 메시지 발행 
@@ -169,9 +172,13 @@ public class PointService {
 	public void rollback(ChannelRequest<RequestPointDTO> req)
 	{
 		RequestPointDTO payload = req.getPayload();
-		String plusMinus = payload.getPlusMinus();
+		
+		int usePoint = payload.getUsePoint();		//차감했던 포인트
+		int addPoint = payload.getAddPoint();		//구매가에 따른 부여했던 포인트 
+		
 		try {
-			if("+".equals(plusMinus)) changePoint(payload.getUserId(), payload.getPoint()); else changePoint(payload.getUserId(), -1 * payload.getPoint());
+			if(usePoint > 0) changePoint(payload.getUserId(), usePoint);
+			changePoint(payload.getUserId(), -1 * addPoint);
 		}catch(Exception e) {
 			e.printStackTrace();
 		}

@@ -8,7 +8,7 @@ import lombok.Setter;
 public class RequestPointDTO {
   private String orderId;
   private String userId;
-  private String plusMinus;
-  private int point;
+  private int usePoint;		//주문시 사용 포인트 
+  private int addPoint;			//구매가에 따른 부여 포인트 
 }
 

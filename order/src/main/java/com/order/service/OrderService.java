@@ -1,35 +1,28 @@
 package com.order.service;
 
 import java.lang.reflect.Type;
-import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import com.order.dao.OrderDao;
 import com.order.model.*;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -62,6 +55,8 @@ public class OrderService
 	@Value("${delivery.db_port}")
 	private String deliveryDBPort;	
 
+	final double ADD_POINT_RATE = 0.01;
+	
 	/**
 	 * @param orderId
 	 * @return
@@ -154,7 +149,8 @@ public class OrderService
 		String orderId = UUID.randomUUID().toString();
 		String trxId = UUID.randomUUID().toString();
 		String orderDate = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-
+		final int TRANSACTION_COUNT = 4;
+		
 		/*
 		 * 메시지 브로커로 전달된 메시지를 Reactor 스트림으로 보내는 클래스
 		 */
@@ -166,6 +162,7 @@ public class OrderService
 		 */
 		OrderEvent orderEvent = OrderEvent.builder()
 				.trxId(trxId)
+				.orderId(orderId)
 				.order(order)
 				.build();
 
@@ -205,27 +202,18 @@ public class OrderService
 		return Flux.create(sink -> {
 			listener.register(sink);
 		})
-			//.subscriberContext(ctx -> ctx.put("orderEvent", orderEvent))
 			.contextWrite(ctx -> ctx.put("orderEvent", orderEvent))
 			.doOnSubscribe(data->{
 				startTransaction(order, trxId, orderId, orderDate);
 			})
 			.doOnNext(recvData->{
-				/*
-				 * 참여 서비스에서 등답이 오면 수행
-				 */
+				 // 참여 서비스에서 응답이 오면 수행
 				processResponse(recvData, orderEvent, retVo);
 			})
-			.buffer(3)
+			.buffer(TRANSACTION_COUNT)		
 			.next()
 			.thenReturn(retVo)
-			.doAfterTerminate(()->{
-				//	        if ( orderEvent.isPaymentCompleted() && orderEvent.isDeliveryCompleted() ) {
-				//	          //resOrderVo.setState("배송중");
-				//	        }
-				//	        else if ( orderEvent.isPaymentCompleted() ) {
-				//	          //resOrderVo.setState("결제완료");
-				//	        }
+			.doAfterTerminate(()-> {
 				endTransaction(trxId);
 			})
 			// TIMEOUT
@@ -300,8 +288,24 @@ public class OrderService
 	private void processResponse(Object recvData, OrderEvent event, ResultVO resultVo)
 	{
 		Gson gson = new Gson();
-		String type = ((JsonElement)recvData).getAsJsonObject().get("messageType").getAsString();
-
+		JsonObject jsonObj = ((JsonElement)recvData).getAsJsonObject();
+		String type = jsonObj.get("messageType").getAsString();
+		String trxId = jsonObj.get("trxId").getAsString();
+		boolean retCode = jsonObj.get("returnCode").getAsBoolean();
+		String errMsg = "";
+		
+		log.info("#### ["+type+"] START processResponse(returnCode:"+retCode);
+	
+		if(!retCode) {
+			errMsg = jsonObj.get("errorString").getAsString();
+			resultVo.setReturnCode(false);
+			resultVo.setReturnMessage(errMsg);
+			log.info("#### [" + type + "] ERROR !! =>"+errMsg);
+			
+			rollback(trxId, event.getOrderId(), event);		//rollback 처리 
+		}
+		
+		/*
 		if ( "PAYMENT".equals(type) ) {
 			Type resType = new TypeToken<ChannelResponse<ResponsePaymentDTO>>(){}.getType();
 			ChannelResponse<ResponsePaymentDTO> resObj = gson.fromJson((JsonElement)recvData, resType);
@@ -338,6 +342,7 @@ public class OrderService
 				resultVo.setReturnMessage(resObj.getErrorString());
 			}
 		}
+		*/
 	}
 
 	/**
@@ -379,7 +384,7 @@ public class OrderService
 			totQty += item.getQty();				
 
 		}
-
+		
 
 		/*
 		 * 주문 마스터
@@ -389,9 +394,9 @@ public class OrderService
 		mst.setOrderDate(orderDate);
 		mst.setOrderTotalAmount(total);
 		mst.setOrderUserId(order.getUserId());
-		mst.setAccumulatePoint((int)(total * 0.01));
+		mst.setAccumulatePoint((int)(total * ADD_POINT_RATE));
 		orderDao.insertOrder(mst);
-
+		
 		/*
 		 * 사용자 정보를 얻는다.
 		 */
@@ -414,7 +419,7 @@ public class OrderService
 
 		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		queue.sendPaymentMessage(gson.toJson(req));
-
+		
 		/*
 		 * 배송 요청 메시지
 		 */
@@ -431,36 +436,34 @@ public class OrderService
 		reqShip.setPayload(reqDelivery);
 
 		queue.sendDeliveryMessage(gson.toJson(reqShip));
-
+		
 		/*
 		 * 포인트 사용 메시지
 		 */
-		if ( order.getUsePoint() > 0 ) {
-			RequestPointDTO payload = new RequestPointDTO();
-			payload.setUserId(order.getUserId());
-			payload.setOrderId(orderId);
-			payload.setPlusMinus("-");
-			payload.setPoint(order.getUsePoint());
-
-			ChannelRequest<RequestPointDTO> reqUse = new ChannelRequest<RequestPointDTO>();
-			reqUse.setTrxId(trxId);
-			reqUse.setPayload(payload);
-
-			queue.sendPointMessage(gson.toJson(reqUse));
-		}
-		
-		//주문가에 따른 point 부여를 위한 메시지 발행 
 		RequestPointDTO payload = new RequestPointDTO();
 		payload.setUserId(order.getUserId());
 		payload.setOrderId(orderId);
-		payload.setPlusMinus("+");
-		payload.setPoint((int) (total * 0.01));
+		payload.setUsePoint(order.getUsePoint());
+		payload.setAddPoint((int) (total * ADD_POINT_RATE));
 
 		ChannelRequest<RequestPointDTO> reqUse = new ChannelRequest<RequestPointDTO>();
 		reqUse.setTrxId(trxId);
 		reqUse.setPayload(payload);
 
 		queue.sendPointMessage(gson.toJson(reqUse));
+		
+		/*
+		 * 제품 정보의 재고량 업데이트를 위한 메시지 발행 
+		 */
+		ProductInventoryDTO reqInventory = new ProductInventoryDTO();
+		reqInventory.setOrderId(orderId);
+		reqInventory.setProducts(order.getProducts());
+
+		ChannelRequest<ProductInventoryDTO> reqMsg = new ChannelRequest<ProductInventoryDTO>();
+		reqMsg.setTrxId(trxId);
+		reqMsg.setPayload(reqInventory);
+
+		queue.sendInventoryMessage(gson.toJson(reqMsg));
 	}
 
 	/**
@@ -479,18 +482,20 @@ public class OrderService
 	 */
 	private void rollback(String trxId, String orderId, OrderEvent event)
 	{
-		System.out.println("@.@ ROLLBACK :" + event); 
+		log.info("@.@ ROLLBACK :" + event); 
 
 		/*
 		 * order_mst 삭제 
 		 */
 		orderDao.deleteOrder(orderId);
+		log.info("[RBL] 주문 !!!");
 
 		/*
 		 * order_dtl 삭제
 		 */
 		orderDao.deleteOrderDetail(orderId);
-
+		log.info("[RBL] 주문상세 !!!");
+		
 		/*
 		 * payment삭제 메시지 전달
 		 */
@@ -506,7 +511,7 @@ public class OrderService
 
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendPaymentMessage(gson.toJson(req));  
-
+			log.info("[RBL] 결제 !!!");
 		}
 
 		/*
@@ -522,7 +527,8 @@ public class OrderService
 			reqShip.setPayload(reqDelivery);
 
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
-			queue.sendDeliveryMessage(gson.toJson(reqShip));    
+			queue.sendDeliveryMessage(gson.toJson(reqShip)); 
+			log.info("[RBL] 배송 !!!");
 		}
 
 		/*
@@ -532,19 +538,29 @@ public class OrderService
 			RequestPointDTO reqPoint = new RequestPointDTO();
 			RequestOrderDTO order = event.getOrder();
 
-			if(order.getUsePoint() > 0) {
-				reqPoint.setOrderId(orderId);
-				reqPoint.setUserId(order.getUserId());
-				reqPoint.setPlusMinus("+");
-				reqPoint.setPoint(order.getUsePoint());
-				ChannelRequest<RequestPointDTO> cancelPoint = new ChannelRequest<>();
-				cancelPoint.setTrxId(trxId);
-				cancelPoint.setMessageType("RLB");
-				cancelPoint.setPayload(reqPoint);
+			long price = 0;
+			int total = 0;
+			ResultVO<ProductDTO> prod = null;
+			
+			for(RequestOrderDetailDTO item : order.getProducts()) {
+				prod = getProduct(item.getProductName());
+				price = prod.getResult().getPrice();
 
-				Gson gson = new GsonBuilder().setPrettyPrinting().create();
-				queue.sendPointMessage(gson.toJson(cancelPoint));   							
+				total += price;
 			}
+			
+			reqPoint.setOrderId(orderId);
+			reqPoint.setUserId(order.getUserId());
+			reqPoint.setUsePoint(order.getUsePoint());
+			reqPoint.setAddPoint((int) (total * ADD_POINT_RATE));
+			ChannelRequest<RequestPointDTO> cancelPoint = new ChannelRequest<>();
+			cancelPoint.setTrxId(trxId);
+			cancelPoint.setMessageType("RLB");
+			cancelPoint.setPayload(reqPoint);
+
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			queue.sendPointMessage(gson.toJson(cancelPoint));   
+			log.info("[RBL] 포인트 !!!");
 		}
 
 		/*
@@ -563,6 +579,7 @@ public class OrderService
 
 			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendInventoryMessage(gson.toJson(cancelInventory));  
+			log.info("[RBL] 제품재고량 !!!");
 		}
 
 	}

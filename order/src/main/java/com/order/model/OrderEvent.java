@@ -20,9 +20,14 @@ public class OrderEvent
 	 * Order 객체 
 	 */
 	private RequestOrderDTO order;
-	
+
 	/*
 	 * 주문 ID
+	 */
+	private String orderId;
+	
+	/*
+	 * 결제 ID
 	 */
 	private String paymentId;
 

@@ -62,7 +62,7 @@ public class DeliveryService {
 
 		try {
 			RequestDeliveryDTO payload = req.getPayload();
-
+			
 			//배달 리스트 저장 
 			DeliveryDetail detail = null;
 			for(RequestDeliveryDetailDTO item : payload.getProducts()) {
@@ -71,7 +71,7 @@ public class DeliveryService {
 				detail.setOrderId(payload.getOrderId());
 				detail.setOrderProdNm(item.getProductName());
 				detail.setOrderQty(item.getQty());
-
+				
 				deliveryDao.insertDeliveryDetail(detail);
 			}
 
@@ -90,20 +90,6 @@ public class DeliveryService {
 			deliveryDao.insertDelivery(delivery);
 
 			/*
-			 * 제품 정보의 재고량 업데이트를 위한 메시지 발행 
-			 */
-			ProductInventoryDTO reqPayload = new ProductInventoryDTO();
-			reqPayload.setOrderId(payload.getOrderId());
-			reqPayload.setProducts(payload.getProducts());
-
-			ChannelRequest<ProductInventoryDTO> reqMsg = new ChannelRequest<ProductInventoryDTO>();
-			reqMsg.setTrxId(req.getTrxId());
-			reqMsg.setPayload(reqPayload);
-
-			queueTemplate.convertAndSend(IChannel.CH_DELIVERY_PRODUCT, gs.toJson(reqMsg));
-
-
-			/*
 			 * 결과를 메시지 브로커로 전송한다. 
 			 */
 			ResponseDeliveryDTO resPayload = new ResponseDeliveryDTO();
@@ -117,6 +103,7 @@ public class DeliveryService {
 			res.setPayload(resPayload);
 
 			queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+			//throw new Exception("Error during insert delivery detail!");
 		}catch(Exception e) {
 			ChannelResponse<ResponseDeliveryDTO> res = new ChannelResponse<>();
 			res.setTrxId(req.getTrxId());
@@ -137,6 +124,7 @@ public class DeliveryService {
 		try {
 			deliveryDao.deleteDelivery(req.getPayload().getOrderId());
 			deliveryDao.deleteDeliveryDetail(req.getPayload().getOrderId());
+			log.info("##### Rollback processed !!");
 		}catch(Exception e) {
 			e.printStackTrace();
 		}

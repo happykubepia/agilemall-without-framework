@@ -78,6 +78,7 @@ public class PaymentService {
 			res.setPayload(resPayload);
 
 			queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+			//throw new Exception("Error during payment!");
 		} catch(Exception e) {
 			ChannelResponse<ResponsePaymentDTO> res = new ChannelResponse<>();
 			res.setTrxId(req.getTrxId());

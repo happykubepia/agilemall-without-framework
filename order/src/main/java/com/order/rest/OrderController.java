@@ -2,6 +2,8 @@ package com.order.rest;
 
 import java.lang.reflect.Type;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,7 @@ import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Tag(name="Order service API", description="Order service API")
@@ -34,6 +37,8 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 @RequestMapping("/api")
 public class OrderController {
+	private final Logger log = LoggerFactory.getLogger(getClass());
+	
 	@Autowired
 	private OrderService orderService;
 
@@ -67,16 +72,21 @@ public class OrderController {
 	 */
 	@RabbitListener(queues = IChannel.CH_ORDER_RESPONSE)
 	public void receiveResponse(String payload) {
-		System.out.println("[@.@ ORDER RECEIVED] " + payload.toString());
+		log.info("[@.@ ORDER RECEIVED] " + payload.toString());
 
 		Gson gson = new Gson();
 		JsonObject jsonObj = gson.fromJson(payload, JsonElement.class).getAsJsonObject();
 		String trxId = jsonObj.get("trxId").getAsString();
-
+		String type = jsonObj.get("messageType").getAsString();
+		
 		try {
 			ResultListener listener = orderManager.getOrder(trxId);
+			
 			if ( listener != null ) {
+				log.info("#### ["+type+"] Find Result listener object for trxId-"+trxId);
 				listener.fireData(jsonObj);
+			} else {
+				log.info("#### ["+type+"] CAN't find Result listener object for trxId-"+trxId);
 			}
 
 		}catch(Exception e) {
