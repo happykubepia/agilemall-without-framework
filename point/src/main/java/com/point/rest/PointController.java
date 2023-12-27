@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,6 +40,12 @@ public class PointController {
 	@Autowired
 	private final PointService pointService;
 
+	@PostMapping("/points")
+	@Operation(summary = "포인트를 등록합니다.")
+	public ResponseEntity<ResultVO<Point>> register(@RequestBody Point point) throws Exception {
+		return pointService.register(point);
+	}
+	
 	@GetMapping("/points/{userId}")
 	@Operation(summary = "포인트를 검색합니다.")
 	@Parameters({

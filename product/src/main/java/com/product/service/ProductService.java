@@ -31,6 +31,16 @@ public class ProductService {
 	@Autowired
 	private RabbitMessagingTemplate queueTemplate;
 	
+	public ResponseEntity<ResultVO<Product>> register(Product product) {
+		productRepository.insert(product);
+		
+		return new ResponseEntity<ResultVO<Product>>(
+				ResultVO.<Product>builder()
+				.returnCode(true)
+				.result(productRepository.findByProductName(product.getProductName()))
+				.build(), HttpStatus.OK);
+	}
+	
 	public ResponseEntity<ResultVO<Product>> search(String prodName) {
 		log.info("search product => "+prodName);
 		

@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,6 +39,12 @@ public class ProductController {
 	@Autowired
 	private final ProductService productService;
 
+	@PostMapping("/products")
+	@Operation(summary = "상품을 등록합니다.")
+	public ResponseEntity<ResultVO<Product>> register(@RequestBody Product product) throws Exception {
+		return productService.register(product);
+	}
+	
 	@GetMapping("/products/{prodName}")
 	@Operation(summary = "상품을 검색합니다.")
 	@Parameters({

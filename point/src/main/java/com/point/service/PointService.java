@@ -29,6 +29,17 @@ public class PointService {
 	@Autowired
 	private RabbitMessagingTemplate queueTemplate;
 	
+
+	public ResponseEntity<ResultVO<Point>> register(Point point) {
+		pointRepository.insert(point);
+		
+		return new ResponseEntity<ResultVO<Point>>(
+				ResultVO.<Point>builder()
+				.returnCode(true)
+				.result(pointRepository.findByUserId(point.getUserId()))
+				.build(), HttpStatus.OK);
+
+	}
 	
 	public ResponseEntity<ResultVO<Point>> search(String userId) {
 		log.info("search point => "+userId);
