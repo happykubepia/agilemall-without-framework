@@ -1,12 +1,8 @@
 package com.customer.dao;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-
 import org.apache.ibatis.annotations.Mapper;
 import org.springframework.stereotype.Repository;
-
 import com.customer.model.User;
 import com.customer.model.UserPointDTO;
 

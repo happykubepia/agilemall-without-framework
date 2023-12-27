@@ -1,10 +1,7 @@
 package com.customer.service;
 
 import java.util.List;
-import java.util.Map;
-
 import org.springframework.http.ResponseEntity;
-
 import com.customer.model.ResultVO;
 import com.customer.model.User;
 import com.customer.model.UserPointDTO;

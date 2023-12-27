@@ -1,21 +1,14 @@
 package com.payment.service;
 
-import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitMessagingTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
-
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.payment.config.IChannel;
 import com.payment.dao.PaymentDao;
 import com.payment.model.ChannelRequest;
