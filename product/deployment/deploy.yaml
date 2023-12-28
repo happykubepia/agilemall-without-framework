@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product
+  labels:
+    app: product
+spec:
+  selector:
+    matchLabels:
+      app: product
+  replicas: 1
+  template:
+    metadata:
+      name: product
+      labels:
+        app: product
+    spec:
+      imagePullSecrets:
+      - name: dockerhub      
+      containers:
+        - name: product
+          image: docker.io/hiondal/product:latest
+          imagePullPolicy: Always
+          env:
+            - name: SERVER_PORT
+              value: "18080"
+          envFrom:
+          - configMapRef:
+              name: product
+          - secretRef:
+              name: product
+                            
+          ports:
+            - name: port1
+              containerPort: 8081
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: product
+data:
+  DB_SERVER: mongodb
+  DB_PORT: "27017"
+  DB_NAME: "product"
+  QUEUE_SERVER: 165.192.105.60
+  QUEUE_PORT: "5672"
+  
+---
+
+kind: Secret
+apiVersion: v1
+metadata:
+  name: product
+type: Opaque
+stringData:
+  DB_USERNAME: admin
+  DB_PASSWORD: P%40ssw0rd$
+  QUEUE_USERNAME: admin
+  QUEUE_PASSWORD: P@ssw0rd$ 
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: product
+spec:
+  type: ClusterIP
+  selector:
+    app: product
+  ports:
+    - name: product
+      port: 8080
+      targetPort: 18080
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: product
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: product-hiondal.165.192.105.60.nip.io
+      http:
+        paths:
+          - path: /(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: product
+                port: 
+                  number: 8080
+                  
