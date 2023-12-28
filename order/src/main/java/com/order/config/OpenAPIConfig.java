@@ -13,7 +13,7 @@ public class OpenAPIConfig {
 	@Bean
 	OpenAPI orderOpenAPI() {
 		return new OpenAPI()
-				.info(new Info().title("Product API")
+				.info(new Info().title("Order API")
 						.description("Product application")
 						.version("v0.0.1")
 						.license(new License().name("Apache 2.0").url("http://springdoc.org")))
