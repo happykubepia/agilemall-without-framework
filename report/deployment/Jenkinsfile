@@ -1,5 +1,5 @@
 
-def label = "payment-hiondal-${env.BUILD_NUMBER}"
+def label = "report-hiondal-${env.BUILD_NUMBER}"
 
 /* -------- functions ---------- */
 def notifySlack(STATUS, COLOR) {
@@ -29,7 +29,7 @@ podTemplate(
         } 
 
 		//-- Read pipeline.properties and setting variables
-		def baseDir = "./payment"
+		def baseDir = "./report"
 		def props = readProperties  file:"${baseDir}/deployment/pipeline.properties"
 		
 		credentialRegistry=props["credentialRegistry"]
