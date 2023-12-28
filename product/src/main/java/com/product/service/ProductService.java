@@ -111,6 +111,39 @@ public class ProductService {
 		return prod;
 	}
 	
+	private boolean checkInventoryQty(Gson gs, ChannelRequest<ProductInventoryDTO> req) {		
+		ProductInventoryDTO payload = req.getPayload();
+		Product prod = null;
+		String prodName = "";
+		int qty = 0;		//차감할 재고량 
+		
+		for(RequestDeliveryDetailDTO item:payload.getProducts()) {
+			prodName = item.getProductName();
+			qty = item.getQty();
+			
+			prod = productRepository.findByProductName(prodName);
+			if(prod == null) {
+				ChannelResponse<ProductInventoryDTO> res = new ChannelResponse<>();
+				res.setTrxId(req.getTrxId());
+				res.setMessageType("PRODUCT");
+				res.setReturnCode(false);
+				res.setErrorString("제품명 <"+prodName+">에 대한 정보를 찾을 수 없음");
+				queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+				return false;
+			}
+			//주문량이 재고량보다 많으면 에러를 리턴함 
+			if(prod.getInventoryQty() < qty) {
+				ChannelResponse<ProductInventoryDTO> res = new ChannelResponse<>();
+				res.setTrxId(req.getTrxId());
+				res.setMessageType("PRODUCT");
+				res.setReturnCode(false);
+				res.setErrorString("제품명 <"+prodName+"의 현재 재고량이 부족하여 주문 불가 합니다. ");
+				queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+				return false;
+			}
+		}
+		return true;
+	}
 
 	/**
 	 * 재고량 처리를 수행한다.
@@ -124,15 +157,22 @@ public class ProductService {
 
 		try {
 			ProductInventoryDTO payload = req.getPayload();
+			Product prod = null;
 			String prodName = "";
 			int qty = 0;		//차감할 재고량 
-			Product prod = null;
 			List<RequestDeliveryDetailDTO> inventoryList = new ArrayList<RequestDeliveryDetailDTO>();
 			RequestDeliveryDetailDTO inventory = null;
+
+			//주문량이 재고량보다 많으면 에러를 리턴함 
+			if(!checkInventoryQty(gs, req)) {
+				return;
+			}
 			
 			for(RequestDeliveryDetailDTO item:payload.getProducts()) {
 				prodName = item.getProductName();
 				qty = item.getQty();
+				
+				//주문량 감소 처리 
 				prod = changeInventory(prodName, -1 * qty);
 				
 				inventory = new RequestDeliveryDetailDTO();

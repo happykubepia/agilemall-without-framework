@@ -95,26 +95,4 @@ public class UserController {
 
 		return userService.setUserDelete(userId);
 	}
-
-	/*
-	 * 메시지 큐
-	 */
-	@Bean
-	Queue queue() {
-		return new Queue(IChannel.CH_POINT_CUSTOMER, false);
-	}
-
-	@RabbitListener(queues = IChannel.CH_POINT_CUSTOMER)
-	public void processMessage(String payload) { 
-		System.out.println("[@.@ CUSTOMER RECEIVED] " + payload.toString());
-		try {
-			Gson gs = new Gson();
-			Type objType = new TypeToken<ChannelRequest<UserPointDTO>>(){}.getType();
-			ChannelRequest<UserPointDTO> req = gs.fromJson(payload, objType);
-			
-			userService.updatePoint(req.getPayload());
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-	}
 }

@@ -57,5 +57,16 @@ public class QueueComponent
 	public void sendInventoryMessage(String payload) {
 		template.convertAndSend(IChannel.CH_DELIVERY_PRODUCT, payload);
 	}
+	
+	@Bean
+	public Queue reportQueue() {
+		return new Queue(IChannel.CH_REPORT, false);
+	}
+	/**
+	 * @param payload
+	 */
+	public void sendReportMessage(String payload) {
+		template.convertAndSend(IChannel.CH_REPORT, payload);
+	}
 		
 }

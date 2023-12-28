@@ -11,9 +11,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.delivery.config.IChannel;
+import com.delivery.config.Constant;
 import com.delivery.dao.DeliveryDao;
 import com.delivery.model.*;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.delivery.model.RequestDeliveryDetailDTO;
 
 @Service
@@ -85,10 +87,23 @@ public class DeliveryService {
 			delivery.setOrderUserName(payload.getOrderUserName());
 			delivery.setOrderDate(payload.getOrderDate());
 			delivery.setShipAddress(payload.getShipAddress());
-			delivery.setShippingState("배송중");
+			delivery.setShippingState(Constant.DELIVERY_STATE_ING);
 
 			deliveryDao.insertDelivery(delivery);
 
+			/*
+			 * CQRS: Report 서비스에 주문정보 업데이트 메시지 발생 
+			 */
+			Delivery4ReportDTO rpt = new Delivery4ReportDTO();
+			rpt.setOrderId(payload.getOrderId());
+			rpt.setShipAddr(payload.getShipAddress());
+			rpt.setShipState(Constant.DELIVERY_STATE_ING);
+			ChannelRequest<Delivery4ReportDTO> reqRpt = new ChannelRequest<>();
+			reqRpt.setTrxId(req.getTrxId());
+			reqRpt.setMessageType("delivery");
+			reqRpt.setPayload(rpt);
+			queueTemplate.convertAndSend(IChannel.CH_REPORT, gs.toJson(reqRpt));
+			
 			/*
 			 * 결과를 메시지 브로커로 전송한다. 
 			 */
@@ -124,6 +139,17 @@ public class DeliveryService {
 		try {
 			deliveryDao.deleteDelivery(req.getPayload().getOrderId());
 			deliveryDao.deleteDeliveryDetail(req.getPayload().getOrderId());
+			
+			//주문 Report 서비스에 rollback 요청함 
+			Gson gs = new GsonBuilder().setPrettyPrinting().create();
+			ChannelRequest<Delivery4ReportDTO> reqRpt = new ChannelRequest<>();
+			Delivery4ReportDTO rpt = new Delivery4ReportDTO();
+			rpt.setOrderId(req.getPayload().getOrderId());
+			reqRpt.setTrxId(req.getTrxId());
+			reqRpt.setMessageType("RBL");
+			reqRpt.setPayload(rpt);
+			queueTemplate.convertAndSend(IChannel.CH_REPORT, gs.toJson(reqRpt));
+			
 			log.info("##### Rollback processed !!");
 		}catch(Exception e) {
 			e.printStackTrace();

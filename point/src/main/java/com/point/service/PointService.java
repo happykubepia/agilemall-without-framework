@@ -12,8 +12,10 @@ import com.point.config.IChannel;
 import com.point.model.ChannelRequest;
 import com.point.model.ChannelResponse;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.point.dao.PointRepository;
 import com.point.model.Point;
+import com.point.model.Point4ReportDTO;
 import com.point.model.RequestPointDTO;
 import com.point.model.ResponsePointDTO;
 import com.point.model.ResultVO;
@@ -133,21 +135,45 @@ public class PointService {
 			int usePoint = payload.getUsePoint();		//차감할 포인트
 			int addPoint = payload.getAddPoint();		//구매가에 따른 부여할 포인트 
 			
-			if(usePoint > 0) obj = changePoint(userId, -1 * usePoint);
+			obj = pointRepository.findByUserId(userId);
+			if(obj == null) {
+				ChannelResponse<ResponsePointDTO> res = new ChannelResponse<>();
+				res.setTrxId(req.getTrxId());
+				res.setMessageType("POINT");
+				res.setReturnCode(false);
+				res.setErrorString("User ID <"+userId+">에 대한 정보를 찾을 수 없음");
+				queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+				return;
+			}
+			
+			if(usePoint > 0) {
+				if(obj.getUserPoint() < usePoint) {
+					ChannelResponse<ResponsePointDTO> res = new ChannelResponse<>();
+					res.setTrxId(req.getTrxId());
+					res.setMessageType("POINT");
+					res.setReturnCode(false);
+					res.setErrorString("User ID <"+userId+">의 잔여 포인트가 부족함");
+					queueTemplate.convertAndSend(IChannel.CH_ORDER_RESPONSE, gs.toJson(res));
+					return;
+				} else {
+					obj = changePoint(userId, -1 * usePoint);
+				}
+			}
+			
 			obj = changePoint(userId, addPoint);
 			
 			/*
-			 * 고객정보의 Point 업데이트를 위한 메시지 발행 
+			 * CQRS: Report 서비스에 주문정보 업데이트 메시지 발생 
 			 */
-			UserPointDTO reqPayload = new UserPointDTO();
-			reqPayload.setUserId(userId);
-			reqPayload.setUserPoint(obj.getUserPoint());
-
-			ChannelRequest<UserPointDTO> reqMsg = new ChannelRequest<UserPointDTO>();
-			reqMsg.setTrxId(req.getTrxId());
-			reqMsg.setPayload(reqPayload);
-
-			queueTemplate.convertAndSend(IChannel.CH_POINT_CUSTOMER, gs.toJson(reqMsg));
+			Point4ReportDTO rpt = new Point4ReportDTO();
+			rpt.setOrderId(payload.getOrderId());
+			rpt.setUserPoint(obj.getUserPoint());
+			
+			ChannelRequest<Point4ReportDTO> reqRpt = new ChannelRequest<>();
+			reqRpt.setTrxId(req.getTrxId());
+			reqRpt.setMessageType("point");
+			reqRpt.setPayload(rpt);
+			queueTemplate.convertAndSend(IChannel.CH_REPORT, gs.toJson(reqRpt));
 			
 			/*
 			 * 처리 결과를 메시지 브로커로 전송한다. 
@@ -188,6 +214,16 @@ public class PointService {
 		try {
 			if(usePoint > 0) changePoint(payload.getUserId(), usePoint);
 			changePoint(payload.getUserId(), -1 * addPoint);
+			
+			//주문 Report 서비스에 rollback 요청함 
+			Gson gs = new GsonBuilder().setPrettyPrinting().create();
+			ChannelRequest<Point4ReportDTO> reqRpt = new ChannelRequest<>();
+			Point4ReportDTO rpt = new Point4ReportDTO();
+			rpt.setOrderId(req.getPayload().getOrderId());
+			reqRpt.setTrxId(req.getTrxId());
+			reqRpt.setMessageType("RBL");
+			reqRpt.setPayload(rpt);
+			queueTemplate.convertAndSend(IChannel.CH_REPORT, gs.toJson(reqRpt));
 		}catch(Exception e) {
 			e.printStackTrace();
 		}

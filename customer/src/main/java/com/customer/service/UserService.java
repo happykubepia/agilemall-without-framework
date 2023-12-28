@@ -19,5 +19,4 @@ public interface UserService {
 
 	public ResponseEntity <String > setUserDelete(String userId) throws Exception;
 
-	void updatePoint(UserPointDTO userPoint);
 }

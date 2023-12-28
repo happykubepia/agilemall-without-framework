@@ -62,7 +62,7 @@ public class UserServiceImpl implements UserService {
 			result.setResult(user);
 		} else {
 			result.setReturnCode(false);
-			result.setReturnMessage("지정된 주문 정보가 없습니다.");
+			result.setReturnMessage("지정된 사용자 정보가 없습니다.");
 		}
 
 		return new ResponseEntity<ResultVO<User>>(result, HttpStatus.OK);
@@ -91,11 +91,6 @@ public class UserServiceImpl implements UserService {
 		log.debug("result :"+ re);
 
 		return new ResponseEntity<String> (re+"", HttpStatus.OK);
-	}
-
-	public void updatePoint(UserPointDTO userPoint) {
-		log.info("Start updatePoint");
-		userDao.updatePoint(userPoint);
 	}
 
 }

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//ED" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.report.dao.ReportDao">
+	<select id="selectReport" parameterType="string"
+		resultType="com.report.model.Report">
+		select
+		*
+		from tb_report
+		where order_id = #{orderId}
+	</select>
+	<insert id="insertReport"
+		parameterType="com.report.model.Report">
+		insert into tb_report(
+		order_id
+		) values (
+		#{orderId}
+		)
+	</insert>
+	
+	<update id="updateDelivery"
+		parameterType="com.report.model.Delivery4ReportDTO">
+		update tb_report set
+		ship_addr = #{shipAddr},
+		ship_state = #{shipState}
+		where order_id = #{orderId}
+	</update>
+	<update id="updateOrder"
+		parameterType="com.report.model.Order4ReportDTO">
+		update tb_report set
+		order_usr_id = #{orderUserId},
+		order_dtm = #{orderDtm},
+		order_tot_amt = #{orderTotalAmount},
+		acc_pnt = #{accPnt},
+		use_point = #{usePoint},
+		order_detail = #{orderDetail}		
+		where order_id = #{orderId}
+	</update>	
+	<update id="updatePay"
+		parameterType="com.report.model.Pay4ReportDTO">
+		update tb_report set
+		pay_dtm = #{payDtm},
+		pay_amt = #{payAmt},
+		card_number = #{cardNumber}
+		where order_id = #{orderId}
+	</update>
+	<update id="updatePoint"
+		parameterType="com.report.model.Point4ReportDTO">
+		update tb_report set
+		user_point = #{userPoint}
+		where order_id = #{orderId}
+	</update>
+		
+	<delete id="deleteReport" parameterType="string">
+		delete from tb_report
+		where order_id = #{orderId}
+	</delete>
+	  	
+</mapper>

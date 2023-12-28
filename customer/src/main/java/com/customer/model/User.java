@@ -10,5 +10,4 @@ public class User {
 	private String userName;
 	private String address;
 	private String cardNumber;
-	private long pointNumber;
 }

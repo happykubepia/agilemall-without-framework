@@ -20,5 +20,4 @@ public interface UserDao {
 
 	int deleteUser(String userId) throws Exception;
 
-	void updatePoint(UserPointDTO userPoint);
 }

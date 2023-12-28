@@ -177,26 +177,6 @@ public class OrderService
 		retVo.setReturnCode(true);
 		retVo.setResult(resOrder);
 
-		/*
-		 * 주문 가능 여부 검사 
-		 */
-		if(!checkInventoryQty(order)) {
-			retVo.setReturnCode(false);
-			retVo.setReturnMessage("주문 가능한 제품이 없습니다!");
-			
-			return Mono.just(retVo);
-		}
-		
-		/*
-		 * 포인트 사용 가능 여부 검사 
-		 */
-		if(!checkUserPoint(order)) {
-			retVo.setReturnCode(false);
-			retVo.setReturnMessage("보유 포인트가 부족합니다!");
-			
-			return Mono.just(retVo);
-		}
-
 		return Flux.create(sink -> {
 			listener.register(sink);
 		})
@@ -233,48 +213,6 @@ public class OrderService
 			})
 			.onErrorReturn(retVo);    
 	}
-
-	/*
-	 * 재고량을 체크하여 주문 가능 여부 검사 
-	 */
-	private boolean checkInventoryQty(RequestOrderDTO order) {
-		int inventoryQty = 0;
-		int qty = 0;
-		int totQty = 0;
-		ResultVO<ProductDTO> prod = null;
-
-		for(RequestOrderDetailDTO item : order.getProducts()) {
-			prod = getProduct(item.getProductName());
-			inventoryQty = prod.getResult().getInventoryQty();
-			qty = item.getQty();
-
-			if(qty <= inventoryQty) {
-				log.info("["+item.getProductName()+"] 주문 수량:" + qty + ", 재고량:"+inventoryQty+"=>주문 가능");
-
-				totQty += item.getQty();				
-			} else {
-				log.info("["+item.getProductName()+"] 주문 수량:" + qty + ", 재고량:"+inventoryQty+"=>주문 불가");
-			}
-		}
-		if(totQty > 0) {
-			return true;	
-		} else {
-			return false;
-		}
-	}
-
-	/*
-	 * 
-	 */
-	private boolean checkUserPoint(RequestOrderDTO order) {
-		ResultVO<User> user = getCustomer(order.getUserId());
-		log.info("보유 포인트:" + user.getResult().getPointNumber()+", 신청 포인트:"+order.getUsePoint());
-		if(order.getUsePoint() > user.getResult().getPointNumber()) {
-			return false; 
-		} else {
-			return true;
-		}
-	}
 	
 	/**
 	 * 메시지 브로커로 메시지가 수신되면 수행한다.
@@ -285,7 +223,6 @@ public class OrderService
 	 */
 	private void processResponse(Object recvData, OrderEvent event, ResultVO resultVo)
 	{
-		Gson gson = new Gson();
 		JsonObject jsonObj = ((JsonElement)recvData).getAsJsonObject();
 		String type = jsonObj.get("messageType").getAsString();
 		String trxId = jsonObj.get("trxId").getAsString();
@@ -315,12 +252,12 @@ public class OrderService
 	private void startTransaction(RequestOrderDTO order, String trxId, String orderId, String orderDate)
 	{
 		long price = 0;
-		int inventoryQty = 0;
 		int qty = 0;
 		int total = 0;
 		int totQty = 0;
 		ResultVO<ProductDTO> prod = null;
-
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		
 		/*
 		 * 주문 상세
 		 */
@@ -329,7 +266,6 @@ public class OrderService
 
 			prod = getProduct(item.getProductName());
 			price = prod.getResult().getPrice();
-			inventoryQty = prod.getResult().getInventoryQty();
 			qty = item.getQty();
 
 
@@ -343,7 +279,6 @@ public class OrderService
 			totQty += item.getQty();				
 
 		}
-		
 
 		/*
 		 * 주문 마스터
@@ -357,10 +292,28 @@ public class OrderService
 		orderDao.insertOrder(mst);
 		
 		/*
+		 * CQRS: 주문레포트 서비스에 메시지 발송  
+		 */
+		Order4ReportDTO rpt = new Order4ReportDTO();
+		rpt.setOrderId(orderId);
+		rpt.setOrderUserId(order.getUserId());
+		rpt.setOrderDtm(orderDate);
+		rpt.setOrderTotalAmount(total);
+		rpt.setAccPnt((int)(total * ADD_POINT_RATE));
+		rpt.setUsePoint(order.getUsePoint());
+		rpt.setOrderDetail(gson.toJson(order.getProducts()));
+		
+		ChannelRequest<Order4ReportDTO> reqRpt = new ChannelRequest<>();
+		reqRpt.setTrxId(trxId);
+		reqRpt.setMessageType("order");
+		reqRpt.setPayload(rpt);
+
+		queue.sendReportMessage(gson.toJson(reqRpt));
+		
+		/*
 		 * 사용자 정보를 얻는다.
 		 */
 		ResultVO<User> user = getCustomer(order.getUserId());
-
 
 		/*
 		 * 결제 요청 메시지
@@ -376,7 +329,6 @@ public class OrderService
 		req.setTrxId(trxId);
 		req.setPayload(reqPayment);
 
-		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		queue.sendPaymentMessage(gson.toJson(req));
 		
 		/*
@@ -443,6 +395,8 @@ public class OrderService
 	{
 		log.info("@.@ ROLLBACK :" + event); 
 
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		
 		/*
 		 * order_mst 삭제 
 		 */
@@ -454,6 +408,18 @@ public class OrderService
 		 */
 		orderDao.deleteOrderDetail(orderId);
 		log.info("[RBL] 주문상세 !!!");
+		
+		/*
+		 * CQRS: 주문레포트 서비스에 메시지 발송  
+		 */
+		ChannelRequest<Order4ReportDTO> reqRpt = new ChannelRequest<>();
+		Order4ReportDTO rpt = new Order4ReportDTO();
+		rpt.setOrderId(orderId);
+		reqRpt.setTrxId(trxId);
+		reqRpt.setMessageType("RBL");
+		reqRpt.setPayload(rpt);
+
+		queue.sendReportMessage(gson.toJson(reqRpt));
 		
 		/*
 		 * payment삭제 메시지 전달
@@ -468,7 +434,6 @@ public class OrderService
 
 			req.setPayload(reqPayment);
 
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendPaymentMessage(gson.toJson(req));  
 			log.info("[RBL] 결제 !!!");
 		}
@@ -485,7 +450,6 @@ public class OrderService
 			reqShip.setMessageType("RLB");
 			reqShip.setPayload(reqDelivery);
 
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendDeliveryMessage(gson.toJson(reqShip)); 
 			log.info("[RBL] 배송 !!!");
 		}
@@ -517,7 +481,6 @@ public class OrderService
 			cancelPoint.setMessageType("RLB");
 			cancelPoint.setPayload(reqPoint);
 
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendPointMessage(gson.toJson(cancelPoint));   
 			log.info("[RBL] 포인트 !!!");
 		}
@@ -536,7 +499,6 @@ public class OrderService
 			cancelInventory.setMessageType("RLB");
 			cancelInventory.setPayload(reqInventory);
 
-			Gson gson = new GsonBuilder().setPrettyPrinting().create();
 			queue.sendInventoryMessage(gson.toJson(cancelInventory));  
 			log.info("[RBL] 제품재고량 !!!");
 		}

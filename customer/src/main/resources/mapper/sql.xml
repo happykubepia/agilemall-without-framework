@@ -7,8 +7,7 @@
 		user_id,
 		user_name,
 		address,
-		card_number,
-		point_number
+		card_number
 		from tb_customer
 	</select>
 	<select id="selectUser" parameterType="string"
@@ -17,8 +16,7 @@
 		user_id,
 		user_name,
 		address,
-		card_number,
-		point_number
+		card_number
 		from tb_customer
 		where user_id = #{userId}
 	</select>
@@ -28,14 +26,12 @@
 		user_id,
 		user_name,
 		address,
-		card_number,
-		point_number
+		card_number
 		) values (
 		#{userId},
 		#{userName},
 		#{address},
-		#{cardNumber},
-		#{pointNumber}
+		#{cardNumber}
 		)
 	</insert>
 	<update id="updateUser"
@@ -43,15 +39,7 @@
 		update tb_customer set
 		user_name = #{userName},
 		address = #{address},
-		card_number = #{cardNumber},
-		point_number = #{pointNumber}
-		where user_id = #{userId}
-	</update>
-	
-	<update id="updatePoint"
-		parameterType="com.customer.model.UserPointDTO">
-		update tb_customer set
-		point_number = #{userPoint}
+		card_number = #{cardNumber}
 		where user_id = #{userId}
 	</update>
 	
