@@ -7,7 +7,7 @@ ENV ARTIFACTORY_HOME ${HOME}
 WORKDIR ${ARTIFACTORY_HOME}
 
 # Copy your jar to the container
-COPY ./customer/build/libs/${ARTIFACTORY_FILE} ${ARTIFACTORY_HOME}
+COPY ${ARTIFACTORY_FILE} ${ARTIFACTORY_HOME}
 
 # Launch the artifactory as docker user
 ENTRYPOINT [ "sh", "-c" ]
