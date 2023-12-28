@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: report
+  labels:
+    app: report
+spec:
+  selector:
+    matchLabels:
+      app: report
+  replicas: 1
+  template:
+    metadata:
+      name: report
+      labels:
+        app: report
+    spec:
+      imagePullSecrets:
+      - name: dockerhub      
+      containers:
+        - name: report
+          image: docker.io/hiondal/report:latest
+          imagePullPolicy: Always
+          env:
+            - name: SERVER_PORT
+              value: "18080"
+          envFrom:
+          - configMapRef:
+              name: report
+          - secretRef:
+              name: report
+                            
+          ports:
+            - name: port1
+              containerPort: 8081
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: report
+data:
+  DB_SERVER: mysql
+  DB_PORT: "3306"
+  DB_NAME: "report"
+  QUEUE_SERVER: 165.192.105.60
+  QUEUE_PORT: "5672"
+  
+---
+
+kind: Secret
+apiVersion: v1
+metadata:
+  name: report
+type: Opaque
+stringData:
+  DB_USERNAME: root
+  DB_PASSWORD: P@ssw0rd$
+  QUEUE_USERNAME: admin
+  QUEUE_PASSWORD: P@ssw0rd$ 
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: report
+spec:
+  type: ClusterIP
+  selector:
+    app: report
+  ports:
+    - name: report
+      port: 8080
+      targetPort: 18080
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: report
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: report-hiondal.165.192.105.60.nip.io
+      http:
+        paths:
+          - path: /(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: report
+                port: 
+                  number: 8080
+                  
