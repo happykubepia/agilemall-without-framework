@@ -53,7 +53,13 @@ data:
   DB_NAME: "order"
   QUEUE_SERVER: 165.192.105.60
   QUEUE_PORT: "5672"
-  
+  CUSTOMER_DB_HOST: customer
+  CUSTOMER_DB_PORT: "8080"
+  PRODUCT_DB_HOST: product
+  PRODUCT_DB_PORT: "8080"
+  DELIVERY_DB_HOST: delivery
+  DELIVERY_DB_PORT: "8080"
+
 ---
 
 kind: Secret
