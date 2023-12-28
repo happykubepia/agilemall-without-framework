@@ -52,7 +52,7 @@ data:
   DB_PORT: "3306"
   DB_NAME: "customer"
   QUEUE_SERVER: 165.192.105.60
-  QUEUE_PORT: 5672
+  QUEUE_PORT: "5672"
   
 ---
 
