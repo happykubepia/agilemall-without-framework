@@ -1,8 +1,0 @@
-package com.order.dao;
-
-public interface OrderDao {
-	public void insertDetail(OrderDetail detail);
-	public void insertOrder(Order order);
-	public void deleteOrder(String orderId);
-	public void deleteOrderDetail(String orderId);
-}

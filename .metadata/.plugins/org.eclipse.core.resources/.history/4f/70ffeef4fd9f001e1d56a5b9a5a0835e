@@ -1,7 +1,0 @@
-package com.product.dao;
-
-import com.product.model.*;
-
-public interface ProductRepository extends MongoRepository<Product, String> {
-	  public Product findByProductName(String productName);
-}

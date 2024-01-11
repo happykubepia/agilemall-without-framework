@@ -1,8 +1,0 @@
-package com.product.service;
-
-public class ProductService {
-	  @Autowired
-	  private ProductRepository productRepository;
-
-	  
-}

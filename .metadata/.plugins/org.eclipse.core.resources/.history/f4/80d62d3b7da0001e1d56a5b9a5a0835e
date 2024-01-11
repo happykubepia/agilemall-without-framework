@@ -1,9 +1,0 @@
-package com.payment.dao;
-
-import com.mlk.entity.Payment;
-
-public interface PaymentDao {
-	public void insertPayment(Payment payment);
-	public void deletePayment(String orderId);
-}
-
